@@ -12,7 +12,6 @@ const PRIMAVERA_ERROR_MESSAGE = {
 }
 
 class PrimaveraParser {
-
     #IsEmptyInput = (input) => { if(input == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NULL_PARAMETER); }
     #IsInput = (input) => { if(input.tagName.toLowerCase() != "input") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_INPUT); }
     #IsValidInputType = (input) => { if(input.getAttribute("type") != "file") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_TYPE); }
