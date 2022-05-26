@@ -1,24 +1,40 @@
+
+const PRIMAVERA_ERROR_MESSAGE = {
+    INPUT : {
+        NULL_PARAMETER : "The first parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+        , NOT_INPUT : "The first parameter value is not an \"input\" tag. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+        , NOT_TYPE : "The first parameter attribute is not the \"file\" attribute. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+    },
+    EVENT : {
+        NULL_PARAMETER : "The second parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+        , NOT_TYPE : "The second parameter is not a function. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+    }
+}
+
 class PrimaveraParser {
 
+    #IsEmptyInput = (input) => { if(input == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NULL_PARAMETER); }
+    #IsInput = (input) => { if(input.tagName.toLowerCase() != "input") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_INPUT); }
+    #IsValidInputType = (input) => { if(input.getAttribute("type") != "file") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_TYPE); }
+    #IsEmptyEvent = (event) => { if(event == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NULL_PARAMETER); }
+    #IsValidEventType = (event) => { if( (event instanceof Function) == false ) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NOT_TYPE); }
+
+    #CheckInput = (input) => {
+        this.#IsEmptyInput(input);
+        this.#IsInput(input);
+        this.#IsValidInputType(input);
+    }
+    #CheckEvent = (event) => {
+        this.#IsEmptyEvent(event);
+        this.#IsValidEventType(event);
+    }
+    
     constructor(input,customEvent,code){
 
-        if(input == null){
-            throw new Error("The first parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete.");   
-        }
-        if(input.tagName.toLowerCase() != "input"){
-            throw new Error("The first parameter value is not an \"input\" tag. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete.");   
-        }
-        if(input.getAttribute("type") != "file"){
-            throw new Error("The first parameter attribute is not the \"file\" attribute. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete.");   
-        }
-        if(customEvent == null){
-            throw new Error("The second parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete.");   
-        }
-        if( (customEvent instanceof Function) == false ){
-            throw new Error("The second parameter is not a function. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."); 
-        }
+        this.#CheckInput(input);
+        this.#CheckEvent(customEvent);
 
-        let XMLParser = this.#XMLParser;
+        const XMLParser = this.#XMLParser;
         input.onchange = function(e){
             
             const files = e.target.files;
@@ -41,12 +57,13 @@ class PrimaveraParser {
             fileReader.readAsText(files[0],"UTF-8");   
 
             input.value = null;
+
         };
     }
 
-    #XMLParser = (input,xml_data,customEvent,code) => {
+    #XMLParser = (input,xmlData,customEvent,code) => {
         let parser = new DOMParser();
-        let xml = parser.parseFromString(xml_data,"text/xml");
+        let xml = parser.parseFromString(xmlData,"text/xml");
         let activities  = this.#XMLCheck(xml,input);
         let activities_length = activities.length;
         var activitiyObjects = new Array();
