@@ -8,10 +8,19 @@ const PRIMAVERA_ERROR_MESSAGE = {
     EVENT : {
         NULL_PARAMETER : "The second parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
         , NOT_TYPE : "The second parameter is not a function. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
+    },
+    XML : {
+        NOT_FORMAT : "This file is not suitable for XML format."
+        , NOT_FIND_PROJECT_TAG : "No \"Project\" node was found in this XML file."
+        , NOT_FIND_ACTIVITY_TAG : "No \"Activity\" node was found in this XML file."
+    },
+    DATE : {
+        NOT_TYPE : "There is no schedule assigned to the activity object."
     }
 }
 
 class PrimaveraParser {
+
     #IsEmptyInput = (input) => { if(input == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NULL_PARAMETER); }
     #IsInput = (input) => { if(input.tagName.toLowerCase() != "input") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_INPUT); }
     #IsValidInputType = (input) => { if(input.getAttribute("type") != "file") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_TYPE); }
@@ -27,7 +36,7 @@ class PrimaveraParser {
         this.#IsEmptyEvent(event);
         this.#IsValidEventType(event);
     }
-    
+
     constructor(input,customEvent,code){
 
         this.#CheckInput(input);
@@ -42,7 +51,9 @@ class PrimaveraParser {
                 input.value = null;
                 return null;
             }
-            if(e.target.files[0].name.slice(-4) != ".xml"){
+
+            const file = e.target.files[0];
+            if(file.type != "text/xml"){
                 input.value = null;
                 return null;
             }
@@ -61,20 +72,21 @@ class PrimaveraParser {
     }
 
     #XMLParser = (input,xmlData,customEvent,code) => {
-        let parser = new DOMParser();
-        let xml = parser.parseFromString(xmlData,"text/xml");
-        let activities  = this.#XMLCheck(xml,input);
-        let activities_length = activities.length;
-        var activitiyObjects = new Array();
 
-        for(let i = 0; i < activities_length; i++){
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(xmlData,"text/xml");
+        const activities  = this.#XMLCheck(xml,input);
+        const activitiesLength = activities.length;
+        const activitiyObjects = new Array();
 
-            let activity = activities[i];    
-            var activityId = activity.getElementsByTagName("Id")[0].childNodes[0].nodeValue;
+        for(let i = 0; i < activitiesLength; i++){
+
+            const activity = activities[i];    
+            const activityId = activity.getElementsByTagName("Id")[0].childNodes[0].nodeValue;
 
             if(activityId.slice(0,code.length) == code){
 
-                let activityObject = new Object();
+                const activityObject = new Object();
 
                 let actualStartDate = activity.getElementsByTagName("ActualStartDate")[0].childNodes[0];
 
@@ -92,8 +104,8 @@ class PrimaveraParser {
                     actualFinishDate = "";
                 }
                 
-                let plannedStartDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedStartDate")[0].childNodes[0].nodeValue );
-                let plannedFinishDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedFinishDate")[0].childNodes[0].nodeValue );
+                const plannedStartDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedStartDate")[0].childNodes[0].nodeValue );
+                const plannedFinishDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedFinishDate")[0].childNodes[0].nodeValue );
                 let activityName = activity.getElementsByTagName("Name")[0].childNodes[0].nodeValue;
 
                 activityObject.activityId = activityId;
@@ -109,7 +121,7 @@ class PrimaveraParser {
 
         }
 
-        activitiyObjects = this.#SortSchedule(activitiyObjects);
+        activitiyObjects.sort(this.#SortSchedule);
         customEvent(activitiyObjects);
     }
 
@@ -117,7 +129,7 @@ class PrimaveraParser {
 
         date = new Date(date);
         if( date == NaN){
-            throw new Error("There is no schedule assigned to the activity object.");
+            throw new Error(PRIMAVERA_ERROR_MESSAGE.DATE.NOT_TYPE);
         }
 
         let year = date.getFullYear();
@@ -132,69 +144,45 @@ class PrimaveraParser {
 
         if( xml.documentElement.nodeName.includes("html") ){
             input.value = null;
-            throw new Error("This file is not suitable for XML format.");
+            throw new Error(PRIMAVERA_ERROR_MESSAGE.XML.NOT_FORMAT);
         }
 
         let project = xml.documentElement.getElementsByTagName("Project")[0];
         if(project == undefined){
             input.value = null;
-            throw new Error("No \"Project\" node was found in this XML file.");
+            throw new Error(PRIMAVERA_ERROR_MESSAGE.XML.NOT_FIND_PROJECT_TAG);
         }
 
         let activities = project.getElementsByTagName("Activity");
         if(activities == undefined){
             input.value = null;
-            throw new Error("No \"Activity\" node was found in this XML file.");
+            throw new Error(PRIMAVERA_ERROR_MESSAGE.XML.NOT_FIND_ACTIVITY_TAG);
         }
 
         return activities;
 
     }
 
-    #SortSchedule = (activities) => {
+    #SortSchedule = (a,b) => {
 
-        activities.sort(function(a,b){
-  
-            if(new Date(a["plannedStartDate"]) < new Date(b["plannedStartDate"])){
-                    return -1;
-            }
-
-            if(a["plannedStartDate"] == b["plannedStartDate"]){
-                
-                if(a["plannedFinishDate"] == b["plannedFinishDate"]){
-
-                    if(parseInt(a["activityId"].replace(/[^0-9]/g,"")) < parseInt(b["activityId"].replace(/[^0-9]/g,""))){
-                        return -1;
-                    }
+        const plannedStartDateA = new Date(a["plannedStartDate"]);
+        const plannedStartDateB = new Date(b["plannedStartDate"]);
     
-                    if(parseInt(a["activityId"].replace(/[^0-9]/g,"")) > parseInt(b["activityId"].replace(/[^0-9]/g,""))){
-                        return 1;
-                    }
+        if(plannedStartDateA < plannedStartDateB) return -1;
+        if(plannedStartDateA > plannedStartDateB) return 1;
 
-                }else{
+        const plannedFinishDateA = new Date(a["plannedFinishDate"]);
+        const plannedFinishDateB = new Date(b["plannedFinishDate"]);
 
-                    if(new Date(a["plannedFinishDate"]) < new Date(b["plannedFinishDate"])){
-                        return 1;
-                    }
+        if(plannedFinishDateA > plannedFinishDateB) return -1;
+        if(plannedFinishDateA < plannedFinishDateB) return 1;
 
-                    if(new Date(a["plannedFinishDate"]) > new Date(b["plannedFinishDate"])){
-                        return -1;
-                    }
+        const activityIdA = parseInt(a["activityId"].replace(/[^0-9]/g,""));
+        const activityIdB = parseInt(b["activityId"].replace(/[^0-9]/g,""));
 
+        if( activityIdA < activityIdB ) return -1;
+        return 1;
 
-                }
-
-
-
-            }
-
-            if(new Date(a["plannedStartDate"]) > new Date(b["plannedStartDate"])){
-                return 1;
-            }
-
-        })
-
-        return activities;
     }
 
 }
