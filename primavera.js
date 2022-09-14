@@ -1,4 +1,3 @@
-
 const PRIMAVERA_ERROR_MESSAGE = {
     INPUT : {
         NULL_PARAMETER : "The first parameter value is null. This class takes two parameters, the first argument requires an \"input\" tag with a \"file\" attribute, and the second argument requires a function to be executed after the operation is complete."
@@ -16,6 +15,35 @@ const PRIMAVERA_ERROR_MESSAGE = {
     },
     DATE : {
         NOT_TYPE : "There is no schedule assigned to the activity object."
+    }
+}
+
+class Activity {
+    id;
+    name;
+    actualStartDate = '';
+    actualFinishDate = '';
+    plannedStartDate;
+    plannedFinishDate;
+
+    constructor(){
+
+    }
+}
+
+class WBS {
+    id = '';
+    children = new Array();
+
+    constructor(id){
+        this.id = id;
+    }
+
+    Append(data){
+        const TYPE_CHECK = data instanceof Activity || data instanceof WBS;
+        if(!TYPE_CHECK){
+            throw new Error('IS NOT Activity OR WBS!!!');
+        }
     }
 }
 
@@ -71,6 +99,8 @@ class PrimaveraParser {
         };
     }
 
+
+
     #XMLParser = (input,xmlData,customEvent,code) => {
 
         const parser = new DOMParser();
@@ -86,7 +116,7 @@ class PrimaveraParser {
 
             if(activityId.slice(0,code.length) == code){
 
-                const activityObject = new Object();
+                const activityObject = new Activity();
 
                 let actualStartDate = activity.getElementsByTagName("ActualStartDate")[0].childNodes[0];
 
@@ -108,12 +138,12 @@ class PrimaveraParser {
                 const plannedFinishDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedFinishDate")[0].childNodes[0].nodeValue );
                 let activityName = activity.getElementsByTagName("Name")[0].childNodes[0].nodeValue;
 
-                activityObject.activityId = activityId;
+                activityObject.id = activityId;
                 activityObject.actualStartDate = actualStartDate;
                 activityObject.actualFinishDate = actualFinishDate;
                 activityObject.plannedStartDate = plannedStartDate;
                 activityObject.plannedFinishDate = plannedFinishDate;
-                activityObject.activityName = activityName;
+                activityObject.name = activityName;
 
                 activitiyObjects.push(activityObject);
 
@@ -165,20 +195,20 @@ class PrimaveraParser {
 
     #SortSchedule = (a,b) => {
 
-        const plannedStartDateA = new Date(a["plannedStartDate"]);
-        const plannedStartDateB = new Date(b["plannedStartDate"]);
+        const plannedStartDateA = new Date(a.plannedStartDate);
+        const plannedStartDateB = new Date(b.plannedStartDate);
     
         if(plannedStartDateA < plannedStartDateB) return -1;
         if(plannedStartDateA > plannedStartDateB) return 1;
 
-        const plannedFinishDateA = new Date(a["plannedFinishDate"]);
-        const plannedFinishDateB = new Date(b["plannedFinishDate"]);
+        const plannedFinishDateA = new Date(a.plannedFinishDate);
+        const plannedFinishDateB = new Date(b.plannedFinishDate);
 
         if(plannedFinishDateA > plannedFinishDateB) return -1;
         if(plannedFinishDateA < plannedFinishDateB) return 1;
 
-        const activityIdA = parseInt(a["activityId"].replace(/[^0-9]/g,""));
-        const activityIdB = parseInt(b["activityId"].replace(/[^0-9]/g,""));
+        const activityIdA = parseInt(a.id.replace(/[^0-9]/g,""));
+        const activityIdB = parseInt(b.id.replace(/[^0-9]/g,""));
 
         if( activityIdA < activityIdB ) return -1;
         return 1;
