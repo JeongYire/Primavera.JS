@@ -12,6 +12,7 @@ const PRIMAVERA_ERROR_MESSAGE = {
         NOT_FORMAT : "This file is not suitable for XML format."
         , NOT_FIND_PROJECT_TAG : "No \"Project\" node was found in this XML file."
         , NOT_FIND_ACTIVITY_TAG : "No \"Activity\" node was found in this XML file."
+        , NOT_FIND_WBS_TAG : "No \"WBS\" node was found in this XML file."
     },
     DATE : {
         NOT_TYPE : "There is no schedule assigned to the activity object."
@@ -25,6 +26,7 @@ class Activity {
     actualFinishDate = '';
     plannedStartDate;
     plannedFinishDate;
+    wbsObjectId;
 
     constructor(){
 
@@ -32,11 +34,14 @@ class Activity {
 }
 
 class WBS {
-    id = '';
+    id;
+    name;
     children = new Array();
+    parentWBS = null;
 
-    constructor(id){
+    constructor(id,name){
         this.id = id;
+        this.name = name;
     }
 
     Append(data){
@@ -44,23 +49,24 @@ class WBS {
         if(!TYPE_CHECK){
             throw new Error('IS NOT Activity OR WBS!!!');
         }
+        this.children.push(data);
     }
 }
 
 class PrimaveraParser {
 
-    #IsEmptyInput = (input) => { if(input == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NULL_PARAMETER); }
-    #IsInput = (input) => { if(input.tagName.toLowerCase() != "input") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_INPUT); }
-    #IsValidInputType = (input) => { if(input.getAttribute("type") != "file") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_TYPE); }
-    #IsEmptyEvent = (event) => { if(event == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NULL_PARAMETER); }
-    #IsValidEventType = (event) => { if( (event instanceof Function) == false ) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NOT_TYPE); }
+    #IsEmptyInput = function(input){ if(input == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NULL_PARAMETER); }
+    #IsInput = function(input){ if(input.tagName.toLowerCase() != "input") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_INPUT); }
+    #IsValidInputType = function(input){ if(input.getAttribute("type") != "file") throw new Error(PRIMAVERA_ERROR_MESSAGE.INPUT.NOT_TYPE); }
+    #IsEmptyEvent = function(event){ if(event == null) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NULL_PARAMETER); }
+    #IsValidEventType = function(event){ if( (event instanceof Function) == false ) throw new Error(PRIMAVERA_ERROR_MESSAGE.EVENT.NOT_TYPE); }
 
-    #CheckInput = (input) => {
+    #CheckInput = function(input){
         this.#IsEmptyInput(input);
         this.#IsInput(input);
         this.#IsValidInputType(input);
     }
-    #CheckEvent = (event) => {
+    #CheckEvent = function(event){
         this.#IsEmptyEvent(event);
         this.#IsValidEventType(event);
     }
@@ -70,8 +76,7 @@ class PrimaveraParser {
         this.#CheckInput(input);
         this.#CheckEvent(customEvent);
 
-        const XMLParser = this.#XMLParser;
-        input.onchange = function(e){
+        input.onchange = (e) => {
             
             const files = e.target.files;
             
@@ -87,9 +92,10 @@ class PrimaveraParser {
             }
 
             const fileReader = new FileReader();
+            const XMLParser = () => {this.#XMLParser(input,fileReader.result,customEvent,code);};
 
-            fileReader.onload = function(){
-                XMLParser(input,fileReader.result,customEvent,code);
+            fileReader.onload = () => {
+                XMLParser();
             };
 
             fileReader.readAsText(files[0],"UTF-8");   
@@ -99,15 +105,19 @@ class PrimaveraParser {
         };
     }
 
-
-
-    #XMLParser = (input,xmlData,customEvent,code) => {
+    #XMLParser = function(input,xmlData,customEvent,code){
 
         const parser = new DOMParser();
         const xml = parser.parseFromString(xmlData,"text/xml");
-        const activities  = this.#XMLCheck(xml,input);
+
+        const parserResult = this.#XMLCheck(xml,input);
+
+        const activities  = parserResult.activities;
         const activitiesLength = activities.length;
-        const activitiyObjects = new Array();
+
+        const wbsGroup = parserResult.wbsGroup;
+        const fatherWBSGroup = new Array();
+        const childrenWBSGroup = new Array();
 
         for(let i = 0; i < activitiesLength; i++){
 
@@ -138,24 +148,77 @@ class PrimaveraParser {
                 const plannedFinishDate = this.#SimleDateFormat( activity.getElementsByTagName("PlannedFinishDate")[0].childNodes[0].nodeValue );
                 let activityName = activity.getElementsByTagName("Name")[0].childNodes[0].nodeValue;
 
+                const wbsObjectId = parseInt(activity.getElementsByTagName("WBSObjectId")[0].childNodes[0].nodeValue);
+
                 activityObject.id = activityId;
                 activityObject.actualStartDate = actualStartDate;
                 activityObject.actualFinishDate = actualFinishDate;
                 activityObject.plannedStartDate = plannedStartDate;
                 activityObject.plannedFinishDate = plannedFinishDate;
                 activityObject.name = activityName;
+                activityObject.wbsObjectId = wbsObjectId;
 
-                activitiyObjects.push(activityObject);
 
+                if(childrenWBSGroup.find(obj => obj.id == wbsObjectId)){
+
+                    childrenWBSGroup.find(obj => obj.id == wbsObjectId).Append(activityObject);
+
+
+                }else{
+
+                    const childrenWBSData = wbsGroup.find(obj => obj.getElementsByTagName("ObjectId")[0].childNodes[0].nodeValue == wbsObjectId);
+                    const childrenWBS = new WBS(wbsObjectId,childrenWBSData.getElementsByTagName("Name")[0].childNodes[0].nodeValue);
+                    childrenWBSGroup.push(childrenWBS);
+                    childrenWBS.Append(activityObject);
+
+                    const parentObjectId = parseInt(childrenWBSData.getElementsByTagName("ParentObjectId")[0].childNodes[0].nodeValue);
+                  
+                    if(fatherWBSGroup.find(obj => obj.id == parentObjectId)){
+
+                        const fatherWBS = fatherWBSGroup.find(obj => obj.id == parentObjectId);
+                        fatherWBS.Append(childrenWBS);
+                        childrenWBS.parentWBS = fatherWBS;
+
+                    }else{
+
+                        const fatherWBSData = wbsGroup.find(obj => obj.getElementsByTagName("ObjectId")[0].childNodes[0].nodeValue == parentObjectId);
+                        const fatherWBS = new WBS(parentObjectId,fatherWBSData.getElementsByTagName("Name")[0].childNodes[0].nodeValue);
+                        fatherWBS.Append(childrenWBS);
+                        fatherWBSGroup.push(fatherWBS);
+                        childrenWBS.parentWBS = fatherWBS;
+
+                    }
+                }
+            
             }
 
         }
 
-        activitiyObjects.sort(this.#SortSchedule);
-        customEvent(activitiyObjects);
+        fatherWBSGroup.sort(this.#SortWBS);
+        const fatherWBSGroupLength = fatherWBSGroup.length;
+
+        for(let i = 0; i < fatherWBSGroupLength; i++){
+
+            const fatherWBS = fatherWBSGroup[i];
+            fatherWBS.children.sort(this.#SortWBS);
+
+            const childrenLength = fatherWBS.children.length;
+        
+            for(let j = 0; j < childrenLength; j++ ){
+
+                const childrenWBS = fatherWBS.children[j];
+                childrenWBS.children.sort(this.#SortAcitivy);
+
+            }
+           
+        }
+        
+
+        //activitiyObjects.sort(this.#SortAcitivy);
+        customEvent(fatherWBSGroup);
     }
 
-    #SimleDateFormat = (date) => {
+    #SimleDateFormat = function(date){
 
         date = new Date(date);
         if( date == NaN){
@@ -170,7 +233,7 @@ class PrimaveraParser {
 
     }
 
-    #XMLCheck = (xml,input) => {
+    #XMLCheck = function(xml,input){
 
         if( xml.documentElement.nodeName.includes("html") ){
             input.value = null;
@@ -189,11 +252,20 @@ class PrimaveraParser {
             throw new Error(PRIMAVERA_ERROR_MESSAGE.XML.NOT_FIND_ACTIVITY_TAG);
         }
 
-        return activities;
+        let wbsGroup = project.getElementsByTagName("WBS");
+        if(wbsGroup == undefined){
+            input.value = null;
+            throw new Error(PRIMAVERA_ERROR_MESSAGE.XML.NOT_FIND_WBS_TAG);
+        }
+
+        return {
+            activities : Array.from(activities),
+            wbsGroup : Array.from(wbsGroup)
+        };
 
     }
 
-    #SortSchedule = (a,b) => {
+    #SortAcitivy = function(a,b){
 
         const plannedStartDateA = new Date(a.plannedStartDate);
         const plannedStartDateB = new Date(b.plannedStartDate);
@@ -212,6 +284,16 @@ class PrimaveraParser {
 
         if( activityIdA < activityIdB ) return -1;
         return 1;
+
+    }
+
+    #SortWBS = function(a,b){
+
+        const idA = a.id;
+        const idB = b.id;
+    
+        if(idA < idB) return -1;
+        if(idA > idB) return 1;
 
     }
 
